@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import DashboardLayout from './components/DashboardLayout';
 import SubmitEntry from './pages/SubmitEntry';
 import ViewSubmissions from './pages/ViewSubmissions';
@@ -13,7 +14,7 @@ const PrivateRoute = ({ children }) => {
 const App = () => {
   return (
     <AuthProvider>
-      <Router>
+      <Router future={{ v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
@@ -27,6 +28,7 @@ const App = () => {
             <Route index element={<ViewSubmissions />} />
             <Route path="submit-entry" element={<SubmitEntry />} />
             <Route path="view-submissions" element={<ViewSubmissions />} />
+            <Route path="register" element={<Register />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>

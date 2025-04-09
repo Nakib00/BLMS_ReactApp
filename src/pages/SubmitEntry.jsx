@@ -118,11 +118,12 @@ const SubmitEntry = () => {
       console.log('Submitting data:', submissionData);
       console.log('Using token:', token);
 
-      const response = await fetch('http://127.0.0.1:8000/api/business-leads', {
+      const response = await fetch('https://hubbackend.desklago.com/api/business-leads', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
         },
         body: JSON.stringify(submissionData),
       });

@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import PropTypes from 'prop-types';
 
 // Constants
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const API_BASE_URL = 'https://hubbackend.desklago.com/api';
 const BUSINESS_TYPES = [
   'Technology', 'Manufacturing', 'Retail', 'Healthcare', 'Finance',
   'Education', 'Consulting', 'Software', 'Food Pantry', 'Tax Preparer', 'Other'
@@ -67,6 +67,12 @@ const ViewSubmissions = () => {
       location: '',
       from_date: '',
       to_date: ''
+    },
+    pagination: {
+      currentPage: 1,
+      perPage: 10,
+      totalPages: 1,
+      totalItems: 0
     }
   });
 
@@ -94,24 +100,51 @@ const ViewSubmissions = () => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
       
-      const response = await fetch(`${API_BASE_URL}/business-leads`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const queryParams = new URLSearchParams({
+        limit: state.pagination.perPage,
+        page: state.pagination.currentPage,
+        ...(state.filters.search && { search: state.filters.search }),
+        ...(state.filters.business_type && { business_type: state.filters.business_type }),
+        ...(state.filters.status && { status: state.filters.status }),
+        ...(state.filters.location && { location: state.filters.location }),
+        ...(state.filters.from_date && { from_date: state.filters.from_date }),
+        ...(state.filters.to_date && { to_date: state.filters.to_date })
+      });
+
+      const response = await fetch(`${API_BASE_URL}/business-leads?${queryParams}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch submissions');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch submissions');
       }
       
       const data = await response.json();
-      setState(prev => ({ ...prev, submissions: data.data, loading: false }));
+      setState(prev => ({ 
+        ...prev, 
+        submissions: Array.isArray(data.data) ? data.data : [], 
+        loading: false,
+        pagination: {
+          ...prev.pagination,
+          totalPages: data.pagination?.total_pages || 1,
+          totalItems: data.pagination?.total_rows || 0
+        }
+      }));
     } catch (error) {
       setState(prev => ({ 
         ...prev, 
-        error: error.message, 
-        loading: false 
+        error: error.message || 'Failed to fetch submissions', 
+        loading: false,
+        submissions: []
       }));
     }
-  }, [token]);
+  }, [token, state.pagination.currentPage, state.pagination.perPage, state.filters]);
 
   // Handle filter changes
   const handleFilterChange = useCallback((e) => {
@@ -218,6 +251,17 @@ const ViewSubmissions = () => {
     }
   }, []);
 
+  // Handle page change
+  const handlePageChange = useCallback((page) => {
+    setState(prev => ({
+      ...prev,
+      pagination: {
+        ...prev.pagination,
+        currentPage: page
+      }
+    }));
+  }, []);
+
   // Fetch data on component mount
   useEffect(() => {
     fetchSubmissions();
@@ -232,6 +276,48 @@ const ViewSubmissions = () => {
       return () => clearTimeout(timer);
     }
   }, [state.message.text]);
+
+  // User Info Popup
+  const UserInfoPopup = ({ user, onClose }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">User Information</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex items-center space-x-4 mb-4">
+          {user.profile_image ? (
+            <img
+              src={`https://hubbackend.desklago.com/storage/${user.profile_image}`}
+              alt={user.name}
+              className="w-16 h-16 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
+              <span className="text-gray-500 text-xl">{user.name.charAt(0)}</span>
+            </div>
+          )}
+          <div>
+            <h4 className="text-lg font-medium">{user.name}</h4>
+            <p className="text-gray-600">{user.email}</p>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p><span className="font-medium">Phone:</span> {user.phone}</p>
+          <p><span className="font-medium">Address:</span> {user.address}</p>
+          <p><span className="font-medium">Type:</span> {user.type}</p>
+          <p><span className="font-medium">Status:</span> {user.is_suspended === "0" ? "Active" : "Suspended"}</p>
+        </div>
+      </div>
+    </div>
+  );
 
   if (state.loading) return <LoadingSpinner />;
   if (state.error) return <ErrorMessage message={state.error} />;
@@ -468,6 +554,51 @@ const ViewSubmissions = () => {
             </div>
           )}
         </div>
+
+        {/* Pagination Controls */}
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-gray-700">
+            Showing <span className="font-medium">{state.submissions.length}</span> of{' '}
+            <span className="font-medium">{state.pagination.totalItems}</span> results
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => handlePageChange(state.pagination.currentPage - 1)}
+              disabled={state.pagination.currentPage === 1}
+              className={`px-3 py-1 rounded-md ${
+                state.pagination.currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Previous
+            </button>
+            {Array.from({ length: state.pagination.totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`px-3 py-1 rounded-md ${
+                  state.pagination.currentPage === page
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              onClick={() => handlePageChange(state.pagination.currentPage + 1)}
+              disabled={state.pagination.currentPage === state.pagination.totalPages}
+              className={`px-3 py-1 rounded-md ${
+                state.pagination.currentPage === state.pagination.totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Lead Details/Edit Modal */}
@@ -634,155 +765,7 @@ const ViewSubmissions = () => {
 
       {/* User Details Modal */}
       {state.selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">User Profile</h3>
-                <button
-                  onClick={() => setState(prev => ({ ...prev, selectedUser: null }))}
-                  className="text-gray-400 hover:text-gray-500 focus:outline-none"
-                >
-                  <span className="sr-only">Close</span>
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="flex flex-col md:flex-row gap-6">
-                {/* User Image Section */}
-                <div className="flex-shrink-0">
-                  {state.selectedUser.profile_image ? (
-                    <img
-                      src={`http://127.0.0.1:8000/storage/${state.selectedUser.profile_image}`}
-                      alt={state.selectedUser.name}
-                      className="h-32 w-32 rounded-full object-cover border-4 border-white shadow-lg"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(state.selectedUser.name)}&background=3B82F6&color=ffffff&size=128`;
-                      }}
-                    />
-                  ) : (
-                    <div className="h-32 w-32 rounded-full bg-blue-100 flex items-center justify-center border-4 border-white shadow-lg">
-                      <span className="text-4xl font-semibold text-blue-600">
-                        {state.selectedUser.name?.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* User Details Section */}
-                <div className="flex-grow space-y-4">
-                  {/* Basic Info */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Full Name</p>
-                          <p className="text-sm text-gray-900">{state.selectedUser.name}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Email</p>
-                          <p className="text-sm text-gray-900">{state.selectedUser.email}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Phone</p>
-                          <p className="text-sm text-gray-900">{state.selectedUser.phone || 'Not provided'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Role</p>
-                          <p className="text-sm text-gray-900 capitalize">{state.selectedUser.role || 'N/A'}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Address</p>
-                          <p className="text-sm text-gray-900">{state.selectedUser.address || 'Not provided'}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Joined Date</p>
-                          <p className="text-sm text-gray-900">{formatDate(state.selectedUser.created_at)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Additional Info */}
-                  {state.selectedUser.bio && (
-                    <div className="mt-4">
-                      <p className="text-sm font-medium text-gray-500">Bio</p>
-                      <p className="mt-1 text-sm text-gray-900">{state.selectedUser.bio}</p>
-                    </div>
-                  )}
-
-                  {/* Status Badge */}
-                  <div className="mt-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      state.selectedUser.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {state.selectedUser.status === 'active' ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stats Section */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <div className="px-4 py-2 bg-gray-50 rounded-lg">
-                    <dt className="text-sm font-medium text-gray-500">Total Leads</dt>
-                    <dd className="mt-1 text-2xl font-semibold text-gray-900">{state.selectedUser.total_leads || 0}</dd>
-                  </div>
-                  <div className="px-4 py-2 bg-gray-50 rounded-lg">
-                    <dt className="text-sm font-medium text-gray-500">Active Leads</dt>
-                    <dd className="mt-1 text-2xl font-semibold text-gray-900">{state.selectedUser.active_leads || 0}</dd>
-                  </div>
-                  <div className="px-4 py-2 bg-gray-50 rounded-lg">
-                    <dt className="text-sm font-medium text-gray-500">Success Rate</dt>
-                    <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                      {state.selectedUser.success_rate ? `${state.selectedUser.success_rate}%` : 'N/A'}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
+        <UserInfoPopup user={state.selectedUser} onClose={() => setState(prev => ({ ...prev, selectedUser: null }))} />
       )}
     </div>
   );
