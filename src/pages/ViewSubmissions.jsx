@@ -5,6 +5,7 @@ import PropTypes from 'prop-types';
 
 // Constants
 const API_BASE_URL = 'https://hubbackend.desklago.com/api';
+const ITEMS_PER_PAGE = 10;
 const BUSINESS_TYPES = [
   'Technology', 'Manufacturing', 'Retail', 'Healthcare', 'Finance',
   'Education', 'Consulting', 'Software', 'Food Pantry', 'Tax Preparer', 'Other'
@@ -70,30 +71,11 @@ const ViewSubmissions = () => {
     },
     pagination: {
       currentPage: 1,
-      perPage: 10,
+      perPage: ITEMS_PER_PAGE,
       totalPages: 1,
       totalItems: 0
     }
   });
-
-  // Memoized filtered submissions
-  const filteredSubmissions = useMemo(() => {
-    return state.submissions.filter(submission => {
-      const matchesSearch = submission.business_name.toLowerCase().includes(state.filters.search.toLowerCase()) ||
-        submission.business_email.toLowerCase().includes(state.filters.search.toLowerCase()) ||
-        submission.business_phone.includes(state.filters.search);
-      
-      const matchesBusinessType = !state.filters.business_type || submission.business_type === state.filters.business_type;
-      const matchesStatus = !state.filters.status || submission.status === state.filters.status;
-      const matchesLocation = !state.filters.location || submission.location.toLowerCase().includes(state.filters.location.toLowerCase());
-      
-      const submissionDate = new Date(submission.created_at);
-      const matchesFromDate = !state.filters.from_date || submissionDate >= new Date(state.filters.from_date);
-      const matchesToDate = !state.filters.to_date || submissionDate <= new Date(state.filters.to_date);
-      
-      return matchesSearch && matchesBusinessType && matchesStatus && matchesLocation && matchesFromDate && matchesToDate;
-    });
-  }, [state.submissions, state.filters]);
 
   // Fetch submissions with error handling
   const fetchSubmissions = useCallback(async () => {
@@ -101,8 +83,8 @@ const ViewSubmissions = () => {
       setState(prev => ({ ...prev, loading: true, error: null }));
       
       const queryParams = new URLSearchParams({
-        limit: state.pagination.perPage,
-        page: state.pagination.currentPage,
+        page: state.pagination.currentPage.toString(),
+        per_page: ITEMS_PER_PAGE.toString(),
         ...(state.filters.search && { search: state.filters.search }),
         ...(state.filters.business_type && { business_type: state.filters.business_type }),
         ...(state.filters.status && { status: state.filters.status }),
@@ -126,13 +108,21 @@ const ViewSubmissions = () => {
       }
       
       const data = await response.json();
+      
+      // Ensure we only show ITEMS_PER_PAGE items on the first page
+      const submissions = data.data || [];
+      const firstPageSubmissions = state.pagination.currentPage === 1 
+        ? submissions.slice(0, ITEMS_PER_PAGE) 
+        : submissions;
+
       setState(prev => ({ 
         ...prev, 
-        submissions: Array.isArray(data.data) ? data.data : [], 
+        submissions: firstPageSubmissions,
         loading: false,
         pagination: {
           ...prev.pagination,
-          totalPages: data.pagination?.total_pages || 1,
+          currentPage: parseInt(data.pagination?.current_page) || 1,
+          totalPages: Math.ceil((data.pagination?.total_rows || 0) / ITEMS_PER_PAGE),
           totalItems: data.pagination?.total_rows || 0
         }
       }));
@@ -144,14 +134,15 @@ const ViewSubmissions = () => {
         submissions: []
       }));
     }
-  }, [token, state.pagination.currentPage, state.pagination.perPage, state.filters]);
+  }, [token, state.pagination.currentPage, state.filters]);
 
   // Handle filter changes
   const handleFilterChange = useCallback((e) => {
     const { name, value } = e.target;
     setState(prev => ({
       ...prev,
-      filters: { ...prev.filters, [name]: value }
+      filters: { ...prev.filters, [name]: value },
+      pagination: { ...prev.pagination, currentPage: 1 } // Reset to first page when filter changes
     }));
   }, []);
 
@@ -166,7 +157,8 @@ const ViewSubmissions = () => {
         location: '',
         from_date: '',
         to_date: ''
-      }
+      },
+      pagination: { ...prev.pagination, currentPage: 1 } // Reset to first page when clearing filters
     }));
   }, []);
 
@@ -252,20 +244,27 @@ const ViewSubmissions = () => {
   }, []);
 
   // Handle page change
-  const handlePageChange = useCallback((page) => {
+  const handlePageChange = useCallback((newPage) => {
     setState(prev => ({
       ...prev,
-      pagination: {
-        ...prev.pagination,
-        currentPage: page
-      }
+      pagination: { ...prev.pagination, currentPage: newPage }
     }));
   }, []);
 
-  // Fetch data on component mount
+  // Effect to fetch data when filters or pagination changes
   useEffect(() => {
     fetchSubmissions();
-  }, [fetchSubmissions]);
+  }, [
+    fetchSubmissions,
+    state.filters.search,
+    state.filters.business_type,
+    state.filters.status,
+    state.filters.location,
+    state.filters.from_date,
+    state.filters.to_date,
+    state.pagination.currentPage,
+    state.pagination.perPage
+  ]);
 
   // Clear message after 3 seconds
   useEffect(() => {
@@ -348,104 +347,71 @@ const ViewSubmissions = () => {
           </button>
         </div>
 
-        {/* Search Bar - Always visible */}
+        {/* Filters Section */}
         <div className="mb-6">
-          <div className="relative">
-            <input
-              type="text"
-              name="search"
-              value={state.filters.search}
-              onChange={handleFilterChange}
-              placeholder="Search by business name, email, or phone..."
-              className="w-full px-4 py-3 pl-10 text-gray-900 placeholder-gray-500 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+          {state.showFilters && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-white rounded-lg shadow">
+              <input
+                type="text"
+                name="search"
+                value={state.filters.search}
+                onChange={handleFilterChange}
+                placeholder="Search by name, email, or phone"
+                className="border rounded p-2"
+              />
+              <select
+                name="business_type"
+                value={state.filters.business_type}
+                onChange={handleFilterChange}
+                className="border rounded p-2"
+              >
+                <option value="">All Business Types</option>
+                {BUSINESS_TYPES.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+              <select
+                name="status"
+                value={state.filters.status}
+                onChange={handleFilterChange}
+                className="border rounded p-2"
+              >
+                <option value="">All Statuses</option>
+                {STATUS_OPTIONS.map(status => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                name="location"
+                value={state.filters.location}
+                onChange={handleFilterChange}
+                placeholder="Filter by location"
+                className="border rounded p-2"
+              />
+              <input
+                type="date"
+                name="from_date"
+                value={state.filters.from_date}
+                onChange={handleFilterChange}
+                className="border rounded p-2"
+              />
+              <input
+                type="date"
+                name="to_date"
+                value={state.filters.to_date}
+                onChange={handleFilterChange}
+                className="border rounded p-2"
+              />
+              <button
+                onClick={clearFilters}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              >
+                Clear Filters
+              </button>
             </div>
-          </div>
+          )}
         </div>
-
-        {/* Advanced Filters - Collapsible */}
-        {state.showFilters && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Business Type</label>
-                <select
-                  name="business_type"
-                  value={state.filters.business_type}
-                  onChange={handleFilterChange}
-                  className="w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Types</option>
-                  {BUSINESS_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  name="status"
-                  value={state.filters.status}
-                  onChange={handleFilterChange}
-                  className="w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Status</option>
-                  {STATUS_OPTIONS.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <input
-                  type="text"
-                  name="location"
-                  value={state.filters.location}
-                  onChange={handleFilterChange}
-                  placeholder="Filter by location"
-                  className="w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                <input
-                  type="date"
-                  name="from_date"
-                  value={state.filters.from_date}
-                  onChange={handleFilterChange}
-                  className="w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                <input
-                  type="date"
-                  name="to_date"
-                  value={state.filters.to_date}
-                  onChange={handleFilterChange}
-                  className="w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  onClick={clearFilters}
-                  className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                >
-                  Clear Filters
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Results Section */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -458,7 +424,7 @@ const ViewSubmissions = () => {
             <div className="p-8 text-center text-red-600">
               {state.error}
             </div>
-          ) : filteredSubmissions.length === 0 ? (
+          ) : state.submissions.length === 0 ? (
             <div className="p-8 text-center">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -480,7 +446,7 @@ const ViewSubmissions = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredSubmissions.map((submission) => (
+                  {state.submissions.map((submission) => (
                     <tr key={submission.id} className="hover:bg-gray-50 transition-colors duration-150">
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900">{submission.business_name}</div>
@@ -558,42 +524,48 @@ const ViewSubmissions = () => {
         {/* Pagination Controls */}
         <div className="mt-4 flex items-center justify-between">
           <div className="text-sm text-gray-700">
-            Showing <span className="font-medium">{state.submissions.length}</span> of{' '}
-            <span className="font-medium">{state.pagination.totalItems}</span> results
+            Showing {Math.min((state.pagination.currentPage - 1) * ITEMS_PER_PAGE + 1, state.pagination.totalItems)} to{' '}
+            {Math.min(state.pagination.currentPage * ITEMS_PER_PAGE, state.pagination.totalItems)} of{' '}
+            {state.pagination.totalItems} entries
           </div>
           <div className="flex space-x-2">
             <button
               onClick={() => handlePageChange(state.pagination.currentPage - 1)}
               disabled={state.pagination.currentPage === 1}
-              className={`px-3 py-1 rounded-md ${
-                state.pagination.currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
+              className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
             >
               Previous
             </button>
-            {Array.from({ length: state.pagination.totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-3 py-1 rounded-md ${
-                  state.pagination.currentPage === page
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {page}
-              </button>
-            ))}
+            <div className="flex items-center space-x-2">
+              {Array.from({ length: state.pagination.totalPages }, (_, i) => i + 1)
+                .filter(page => {
+                  const current = state.pagination.currentPage;
+                  return page === 1 || 
+                         page === state.pagination.totalPages || 
+                         (page >= current - 1 && page <= current + 1);
+                })
+                .map((page, index, array) => (
+                  <React.Fragment key={page}>
+                    {index > 0 && array[index - 1] !== page - 1 && (
+                      <span className="px-2 py-2">...</span>
+                    )}
+                    <button
+                      onClick={() => handlePageChange(page)}
+                      className={`px-4 py-2 border text-sm font-medium rounded-md ${
+                        page === state.pagination.currentPage
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                ))}
+            </div>
             <button
               onClick={() => handlePageChange(state.pagination.currentPage + 1)}
               disabled={state.pagination.currentPage === state.pagination.totalPages}
-              className={`px-3 py-1 rounded-md ${
-                state.pagination.currentPage === state.pagination.totalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
+              className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
             >
               Next
             </button>

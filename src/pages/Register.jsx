@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Register = () => {
   const navigate = useNavigate();
+  const { token, user } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -53,6 +55,12 @@ const Register = () => {
     setError('');
     setLoading(true);
 
+    if (!user?.id) {
+      setError('You must be logged in to register new users');
+      setLoading(false);
+      return;
+    }
+
     try {
       const formDataToSend = new FormData();
       Object.keys(formData).forEach(key => {
@@ -61,9 +69,16 @@ const Register = () => {
         }
       });
 
+      formDataToSend.append('reg_user_id', user.id);
+
       const response = await fetch('https://hubbackend.desklago.com/api/register', {
         method: 'POST',
-        body: formDataToSend
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        body: formDataToSend,
+        credentials: 'include'
       });
 
       const data = await response.json();
@@ -72,26 +87,34 @@ const Register = () => {
         throw new Error(data.message || 'Registration failed');
       }
 
-      navigate('/dashboard');
+      navigate('/dashboard/users', { replace: true });
     } catch (error) {
-      setError(error.message);
+      setError(error.message || 'An error occurred during registration');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="p-8">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900">Register New User</h2>
-              <p className="mt-2 text-sm text-gray-600">Create a new user account for the system</p>
-            </div>
+  const handleCancel = (e) => {
+    e.preventDefault();
+    navigate('/dashboard/users', { replace: true });
+  };
 
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+          {/* Header Section */}
+          <div className="px-6 py-8 bg-gradient-to-r from-blue-600 to-indigo-600 sm:px-10">
+            <div className="text-white">
+              <h2 className="text-3xl font-bold">Register New User</h2>
+              <p className="mt-2 text-blue-100">Create a new account for the system</p>
+            </div>
+          </div>
+
+          <div className="px-6 py-8 sm:px-10">
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -105,122 +128,143 @@ const Register = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <form onSubmit={handleSubmit} className="space-y-8">
+              {/* Profile Image Section */}
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
+                <label className="block text-sm font-medium text-gray-700 mb-4">Profile Image</label>
+                <div className="flex items-center space-x-6">
+                  {previewImage ? (
+                    <img
+                      src={previewImage}
+                      alt="Preview"
+                      className="h-32 w-32 rounded-full object-cover ring-4 ring-blue-100"
+                    />
+                  ) : (
+                    <div className="h-32 w-32 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center ring-4 ring-blue-50">
+                      <svg className="h-16 w-16 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      name="profile_image"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="block w-full text-sm text-gray-500 
+                        file:mr-4 file:py-3 file:px-4 
+                        file:rounded-full file:border-0 
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100
+                        focus:outline-none"
+                    />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Recommended: Square image, at least 300x300px
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Form Grid */}
+              <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                 {/* Name */}
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                   <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                     Full Name
                   </label>
                   <div className="mt-1">
                     <input
+                      type="text"
                       id="name"
                       name="name"
-                      type="text"
                       required
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="John Doe"
                       value={formData.name}
                       onChange={handleChange}
+                      className="block w-full px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="John Doe"
                     />
                   </div>
                 </div>
 
                 {/* Email */}
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                     Email Address
                   </label>
                   <div className="mt-1">
                     <input
+                      type="email"
                       id="email"
                       name="email"
-                      type="email"
                       required
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="john@example.com"
                       value={formData.email}
                       onChange={handleChange}
+                      className="block w-full px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="john@example.com"
                     />
                   </div>
                 </div>
 
                 {/* Password */}
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                     Password
                   </label>
                   <div className="mt-1">
                     <input
+                      type="password"
                       id="password"
                       name="password"
-                      type="password"
                       required
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="••••••••"
                       value={formData.password}
                       onChange={handleChange}
+                      className="block w-full px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="••••••••"
                     />
                   </div>
                 </div>
 
                 {/* Confirm Password */}
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                   <label htmlFor="password_confirmation" className="block text-sm font-medium text-gray-700">
                     Confirm Password
                   </label>
                   <div className="mt-1">
                     <input
+                      type="password"
                       id="password_confirmation"
                       name="password_confirmation"
-                      type="password"
                       required
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="••••••••"
                       value={formData.password_confirmation}
                       onChange={handleChange}
+                      className="block w-full px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="••••••••"
                     />
                   </div>
                 </div>
 
                 {/* Phone */}
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                   <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
                     Phone Number
                   </label>
                   <div className="mt-1">
                     <input
+                      type="tel"
                       id="phone"
                       name="phone"
-                      type="tel"
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="+1 (555) 000-0000"
                       value={formData.phone}
                       onChange={handleChange}
-                    />
-                  </div>
-                </div>
-
-                {/* Address */}
-                <div>
-                  <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                    Address
-                  </label>
-                  <div className="mt-1">
-                    <input
-                      id="address"
-                      name="address"
-                      type="text"
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="123 Main St, City, Country"
-                      value={formData.address}
-                      onChange={handleChange}
+                      className="block w-full px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="+1 (555) 000-0000"
                     />
                   </div>
                 </div>
 
                 {/* User Type */}
-                <div className="sm:col-span-2">
+                <div className="col-span-2 sm:col-span-1">
                   <label htmlFor="type" className="block text-sm font-medium text-gray-700">
                     User Type
                   </label>
@@ -229,9 +273,9 @@ const Register = () => {
                       id="type"
                       name="type"
                       required
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
                       value={formData.type}
                       onChange={handleChange}
+                      className="block w-full px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="">Select User Type</option>
                       {userTypes.map(type => (
@@ -243,53 +287,41 @@ const Register = () => {
                   </div>
                 </div>
 
-                {/* Profile Image */}
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Profile Image
+                {/* Address */}
+                <div className="col-span-2">
+                  <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                    Address
                   </label>
-                  <div className="mt-1 flex items-center space-x-4">
-                    <div className="flex-1">
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/jpg"
-                        onChange={handleImageChange}
-                        className="block w-full text-sm text-gray-500
-                          file:mr-4 file:py-2 file:px-4
-                          file:rounded-lg file:border-0
-                          file:text-sm file:font-semibold
-                          file:bg-blue-50 file:text-blue-700
-                          hover:file:bg-blue-100"
-                      />
-                    </div>
-                    {previewImage && (
-                      <div className="flex-shrink-0">
-                        <img
-                          src={previewImage}
-                          alt="Preview"
-                          className="h-16 w-16 rounded-full object-cover border-2 border-gray-200"
-                        />
-                      </div>
-                    )}
+                  <div className="mt-1">
+                    <textarea
+                      id="address"
+                      name="address"
+                      rows={3}
+                      value={formData.address}
+                      onChange={handleChange}
+                      className="block w-full px-4 py-3 rounded-xl border border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter full address"
+                    />
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end space-x-4">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-4 pt-6 border-t">
                 <button
                   type="button"
-                  onClick={() => navigate('/dashboard')}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  onClick={handleCancel}
+                  className="px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                  className={`px-6 py-3 text-sm font-medium text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 ${
                     loading
                       ? 'bg-blue-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
                   }`}
                 >
                   {loading ? (
