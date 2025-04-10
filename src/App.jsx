@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import DashboardLayout from './components/DashboardLayout';
+import Dashboard from './pages/Dashboard';
 import SubmitEntry from './pages/SubmitEntry';
 import ViewSubmissions from './pages/ViewSubmissions';
 import Users from './pages/Users';
@@ -33,7 +34,7 @@ const App = () => {
               </PrivateRoute>
             }
           >
-            <Route index element={<ViewSubmissions />} />
+            <Route index element={<Dashboard />} />
             <Route path="submit-entry" element={<SubmitEntry />} />
             <Route path="view-submissions" element={<ViewSubmissions />} />
             <Route 

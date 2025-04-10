@@ -17,10 +17,9 @@ const STATUS_OPTIONS = [
 
 // Status color mapping
 const STATUS_COLORS = {
-  'Interested': 'bg-green-100 text-green-800',
-  'Not Interested': 'bg-red-100 text-red-800',
   'Pending': 'bg-yellow-100 text-yellow-800',
-  'In Progress': 'bg-blue-100 text-blue-800'
+  'Accepted': 'bg-green-100 text-green-800',
+  'Incomplete': 'bg-red-100 text-red-800'
 };
 
 // Reusable components
@@ -51,7 +50,7 @@ ErrorMessage.propTypes = {
 };
 
 const ViewSubmissions = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [state, setState] = useState({
     submissions: [],
     loading: true,
@@ -74,8 +73,20 @@ const ViewSubmissions = () => {
       perPage: ITEMS_PER_PAGE,
       totalPages: 1,
       totalItems: 0
-    }
+    },
+    isFiltering: false
   });
+
+  // Function to determine which columns to show based on user type and subscription
+  const getVisibleColumns = useCallback(() => {
+    if (user?.type?.toLowerCase() === 'client') {
+      if (user.is_subscribe === "1") {
+        return ['business_info', 'contact', 'status', 'created_by', 'date'];
+      }
+      return ['business_info', 'status', 'created_by', 'date'];
+    }
+    return ['business_info', 'contact', 'status', 'created_by', 'date', 'actions'];
+  }, [user]);
 
   // Fetch submissions with error handling
   const fetchSubmissions = useCallback(async () => {
@@ -93,6 +104,11 @@ const ViewSubmissions = () => {
         ...(state.filters.to_date && { to_date: state.filters.to_date })
       });
 
+      // Add user_id filter for leader and member roles
+      if (user?.type && ['leader', 'member'].includes(user.type.toLowerCase())) {
+        queryParams.append('user_id', user.id);
+      }
+
       const response = await fetch(`${API_BASE_URL}/business-leads?${queryParams}`, {
         method: 'GET',
         headers: {
@@ -109,15 +125,15 @@ const ViewSubmissions = () => {
       
       const data = await response.json();
       
-      // Ensure we only show ITEMS_PER_PAGE items on the first page
-      const submissions = data.data || [];
-      const firstPageSubmissions = state.pagination.currentPage === 1 
-        ? submissions.slice(0, ITEMS_PER_PAGE) 
-        : submissions;
+      // Filter data based on user role if needed (in case backend doesn't handle it)
+      let submissions = data.data || [];
+      if (user?.type && ['leader', 'member'].includes(user.type.toLowerCase())) {
+        submissions = submissions.filter(submission => submission.user_id === user.id);
+      }
 
       setState(prev => ({ 
         ...prev, 
-        submissions: firstPageSubmissions,
+        submissions,
         loading: false,
         pagination: {
           ...prev.pagination,
@@ -134,7 +150,7 @@ const ViewSubmissions = () => {
         submissions: []
       }));
     }
-  }, [token, state.pagination.currentPage, state.filters]);
+  }, [token, state.pagination.currentPage, state.filters, user]);
 
   // Handle filter changes
   const handleFilterChange = useCallback((e) => {
@@ -142,7 +158,8 @@ const ViewSubmissions = () => {
     setState(prev => ({
       ...prev,
       filters: { ...prev.filters, [name]: value },
-      pagination: { ...prev.pagination, currentPage: 1 } // Reset to first page when filter changes
+      pagination: { ...prev.pagination, currentPage: 1 }, // Reset to first page when filter changes
+      isFiltering: true
     }));
   }, []);
 
@@ -158,7 +175,8 @@ const ViewSubmissions = () => {
         from_date: '',
         to_date: ''
       },
-      pagination: { ...prev.pagination, currentPage: 1 } // Reset to first page when clearing filters
+      pagination: { ...prev.pagination, currentPage: 1 }, // Reset to first page when clearing filters
+      isFiltering: false
     }));
   }, []);
 
@@ -377,9 +395,9 @@ const ViewSubmissions = () => {
                 className="border rounded p-2"
               >
                 <option value="">All Statuses</option>
-                {STATUS_OPTIONS.map(status => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
+                <option value="Pending">Pending</option>
+                <option value="Accepted">Accepted</option>
+                <option value="Incomplete">Incomplete</option>
               </select>
               <input
                 type="text"
@@ -437,82 +455,98 @@ const ViewSubmissions = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Business Info</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    {getVisibleColumns().includes('business_info') && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Business Info</th>
+                    )}
+                    {getVisibleColumns().includes('contact') && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                    )}
+                    {getVisibleColumns().includes('status') && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    )}
+                    {getVisibleColumns().includes('created_by') && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
+                    )}
+                    {getVisibleColumns().includes('date') && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    )}
+                    {getVisibleColumns().includes('actions') && (
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {state.submissions.map((submission) => (
                     <tr key={submission.id} className="hover:bg-gray-50 transition-colors duration-150">
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{submission.business_name}</div>
-                        <div className="text-sm text-gray-500">{submission.business_type}</div>
-                        {submission.website_url && (
-                          <a
-                            href={submission.website_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-blue-600 hover:text-blue-800 flex items-center mt-1"
+                      {getVisibleColumns().includes('business_info') && (
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900">{submission.business_name}</div>
+                          <div className="text-sm text-gray-500">{submission.business_type}</div>
+                          {(user?.type !== 'client' || user?.is_subscribe === "1") && submission.website_url && (
+                            <a href={submission.website_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-800">
+                              Visit Website
+                            </a>
+                          )}
+                        </td>
+                      )}
+                      {getVisibleColumns().includes('contact') && (
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900">{submission.business_email}</div>
+                          <div className="text-sm text-gray-500">{submission.business_phone}</div>
+                          <div className="text-sm text-gray-500">{submission.location}</div>
+                        </td>
+                      )}
+                      {getVisibleColumns().includes('status') && (
+                        <td className="px-6 py-4">
+                          <StatusBadge status={submission.status} />
+                        </td>
+                      )}
+                      {getVisibleColumns().includes('created_by') && (
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => setState(prev => ({ ...prev, selectedUser: submission.user }))}
+                            className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
                           >
                             <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
-                            Visit Website
-                          </a>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{submission.business_email}</div>
-                        <div className="text-sm text-gray-500">{submission.business_phone}</div>
-                        <div className="text-sm text-gray-500">{submission.location}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={submission.status} />
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => setState(prev => ({ ...prev, selectedUser: submission.user }))}
-                          className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
-                        >
-                          <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                          {submission.user?.name}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {formatDate(submission.created_at)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => {
-                              setState(prev => ({ ...prev, selectedLead: submission, isEditing: false }));
-                            }}
-                            className="text-blue-600 hover:text-blue-800"
-                          >
-                            View
+                            {submission.user?.name}
                           </button>
-                          <button
-                            onClick={() => {
-                              setState(prev => ({ ...prev, selectedLead: submission, isEditing: true }));
-                            }}
-                            className="text-green-600 hover:text-green-800"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleLeadDelete(submission.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
+                        </td>
+                      )}
+                      {getVisibleColumns().includes('date') && (
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {formatDate(submission.created_at)}
+                        </td>
+                      )}
+                      {getVisibleColumns().includes('actions') && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => {
+                                setState(prev => ({ ...prev, selectedLead: submission, isEditing: false }));
+                              }}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => {
+                                setState(prev => ({ ...prev, selectedLead: submission, isEditing: true }));
+                              }}
+                              className="text-green-600 hover:text-green-800"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleLeadDelete(submission.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -693,9 +727,9 @@ const ViewSubmissions = () => {
                       disabled={!state.isEditing}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     >
-                      {STATUS_OPTIONS.map(status => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
+                      <option value="Pending">Pending</option>
+                      <option value="Accepted">Accepted</option>
+                      <option value="Incomplete">Incomplete</option>
                     </select>
                   </div>
                 </div>
@@ -743,4 +777,4 @@ const ViewSubmissions = () => {
   );
 };
 
-export default ViewSubmissions; 
+export default ViewSubmissions;

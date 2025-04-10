@@ -1,92 +1,74 @@
-import { useState, useEffect, useCallback } from 'react';
-import { apiService } from '../services/api';
+import { useState, useCallback, useEffect } from 'react';
 
-export const useBusinessLeads = (initialFilters = {}) => {
-  const [state, setState] = useState({
-    leads: [],
-    loading: true,
-    error: null,
-    filters: initialFilters,
-    pagination: {
-      currentPage: 1,
-      totalPages: 1,
-      totalItems: 0
-    }
+export const ITEMS_PER_PAGE = 10;
+
+export const useBusinessLeads = (initialData = []) => {
+  const [data, setData] = useState(initialData);
+  const [filteredData, setFilteredData] = useState(initialData);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState({
+    search: '',
+    business_type: '',
+    status: '',
+    location: '',
+    from_date: '',
+    to_date: ''
   });
 
-  const fetchLeads = useCallback(async (filters = state.filters) => {
-    try {
-      setState(prev => ({ ...prev, loading: true, error: null }));
-      const response = await apiService.getBusinessLeads(filters);
-      setState(prev => ({
-        ...prev,
-        leads: response.data,
-        loading: false,
-        pagination: {
-          currentPage: response.meta?.current_page || 1,
-          totalPages: response.meta?.last_page || 1,
-          totalItems: response.meta?.total || 0
-        }
-      }));
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        error: error.message,
-        loading: false
-      }));
-    }
-  }, [state.filters]);
+  // Apply filters to data
+  const applyFilters = useCallback((data, filters) => {
+    return data.filter(item => {
+      const matchesSearch = !filters.search || 
+        Object.values(item).some(val => 
+          String(val).toLowerCase().includes(filters.search.toLowerCase())
+        );
+      
+      const matchesBusinessType = !filters.business_type || 
+        item.business_type === filters.business_type;
+      
+      const matchesStatus = !filters.status || 
+        item.status === filters.status;
+      
+      const matchesLocation = !filters.location || 
+        item.location.toLowerCase().includes(filters.location.toLowerCase());
+      
+      const matchesDate = (!filters.from_date && !filters.to_date) || 
+        (new Date(item.created_at) >= new Date(filters.from_date) && 
+         new Date(item.created_at) <= new Date(filters.to_date));
 
-  const updateFilters = useCallback((newFilters) => {
-    setState(prev => ({
-      ...prev,
-      filters: { ...prev.filters, ...newFilters }
-    }));
+      return matchesSearch && matchesBusinessType && 
+             matchesStatus && matchesLocation && matchesDate;
+    });
   }, []);
 
-  const createLead = useCallback(async (leadData) => {
-    try {
-      const response = await apiService.createBusinessLead(leadData);
-      await fetchLeads();
-      return response;
-    } catch (error) {
-      throw error;
-    }
-  }, [fetchLeads]);
-
-  const updateLead = useCallback(async (id, leadData) => {
-    try {
-      const response = await apiService.updateBusinessLead(id, leadData);
-      await fetchLeads();
-      return response;
-    } catch (error) {
-      throw error;
-    }
-  }, [fetchLeads]);
-
-  const deleteLead = useCallback(async (id) => {
-    try {
-      await apiService.deleteBusinessLead(id);
-      await fetchLeads();
-    } catch (error) {
-      throw error;
-    }
-  }, [fetchLeads]);
-
+  // Update filtered data when filters or data change
   useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
+    const filtered = applyFilters(data, filters);
+    setFilteredData(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [data, filters, applyFilters]);
+
+  // Get paginated data
+  const getPaginatedData = useCallback(() => {
+    const isFiltering = Object.values(filters).some(val => val !== '');
+    if (isFiltering) {
+      return filteredData; // Return all filtered data when filtering
+    }
+    
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return filteredData.slice(start, end);
+  }, [currentPage, filteredData, filters]);
 
   return {
-    leads: state.leads,
-    loading: state.loading,
-    error: state.error,
-    filters: state.filters,
-    pagination: state.pagination,
-    fetchLeads,
-    updateFilters,
-    createLead,
-    updateLead,
-    deleteLead
+    data: getPaginatedData(),
+    totalItems: filteredData.length,
+    currentPage,
+    setCurrentPage,
+    filters,
+    setFilters,
+    setData,
+    totalPages: Math.ceil(filteredData.length / ITEMS_PER_PAGE),
+    isFiltering: Object.values(filters).some(val => val !== '')
   };
-}; 
+};

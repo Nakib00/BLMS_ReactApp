@@ -368,10 +368,9 @@ const SubmitEntry = () => {
                 className={getInputClassName('status')}
               >
                 <option value="">Select Status</option>
-                <option value="Interested">Interested</option>
-                <option value="Not Interested">Not Interested</option>
                 <option value="Pending">Pending</option>
-                <option value="In Progress">In Progress</option>
+                <option value="Accepted">Accepted</option>
+                <option value="Incomplete">Incomplete</option>
               </select>
               {validationErrors.status && (
                 <p className="mt-1 text-sm text-red-600">{validationErrors.status}</p>
@@ -425,4 +424,4 @@ const SubmitEntry = () => {
   );
 };
 
-export default SubmitEntry; 
+export default SubmitEntry;
