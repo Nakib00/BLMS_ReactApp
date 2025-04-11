@@ -1,4 +1,5 @@
 import { createContext, useContext, useState } from 'react';
+import { apiService } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -7,32 +8,24 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
   const [token, setToken] = useState(localStorage.getItem('token'));
 
   const login = async (email, password) => {
     try {
-      const response = await fetch('https://hubbackend.desklago.com/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await apiService.login({ email, password });
 
-      const data = await response.json();
-
-      if (data.success) {
-        setUser(data.data.admin);
-        setToken(data.data.token);
-        localStorage.setItem('token', data.data.token);
-        localStorage.setItem('user', JSON.stringify(data.data.admin));
+      if (response.success) {
+        setUser(response.data.admin);
+        setToken(response.data.token);
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.admin));
         return { success: true };
       } else {
-        return { success: false, message: data.message };
+        return { success: false, message: response.message || 'Invalid credentials' };
       }
     } catch (error) {
-      return { success: false, message: 'An error occurred during login' };
+      return { success: false, message: error.message || 'An error occurred during login' };
     }
   };
 
@@ -52,4 +45,4 @@ export const AuthProvider = ({ children }) => {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}; 
+};

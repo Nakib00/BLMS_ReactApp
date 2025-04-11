@@ -29,10 +29,10 @@ export const ROUTES = {
 
 export const API_ENDPOINTS = {
   AUTH: {
-    LOGIN: '/auth/login',
-    REGISTER: '/auth/register',
-    LOGOUT: '/auth/logout',
-    PROFILE: '/auth/profile'
+    LOGIN: '/login',
+    REGISTER: '/register',
+    LOGOUT: '/logout',
+    PROFILE: '/profile'
   },
   BUSINESS_LEADS: {
     LIST: '/business-leads',

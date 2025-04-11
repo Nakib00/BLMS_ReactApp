@@ -2,13 +2,14 @@ import { API_BASE_URL, API_ENDPOINTS } from '../constants';
 
 class ApiService {
   constructor() {
-    this.baseUrl = API_BASE_URL;
+    this.baseUrl = 'https://hubbackend.desklago.com/api';
   }
 
   async request(endpoint, options = {}) {
     const token = localStorage.getItem('auth_token');
     const headers = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers
     };
@@ -19,12 +20,13 @@ class ApiService {
         headers
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'An error occurred');
+        throw new Error(data.message || 'An error occurred');
       }
 
-      return await response.json();
+      return data;
     } catch (error) {
       console.error('API Error:', error);
       throw error;
@@ -43,6 +45,12 @@ class ApiService {
     return this.request(API_ENDPOINTS.AUTH.REGISTER, {
       method: 'POST',
       body: JSON.stringify(userData)
+    });
+  }
+
+  async logout() {
+    return this.request(API_ENDPOINTS.AUTH.LOGOUT, {
+      method: 'POST'
     });
   }
 
@@ -81,4 +89,4 @@ class ApiService {
   }
 }
 
-export const apiService = new ApiService(); 
+export const apiService = new ApiService();
