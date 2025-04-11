@@ -19,6 +19,9 @@ const SubmitEntry = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showFormatInfo, setShowFormatInfo] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState({ type: '', text: '' });
+  const [isDragging, setIsDragging] = useState(false);
 
   const businessTypes = [
     'Technology',
@@ -175,6 +178,62 @@ const SubmitEntry = () => {
     }
   };
 
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+
+    const allowedTypes = [
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      setUploadMessage({ type: 'error', text: 'Please upload only CSV, XLS, or XLSX files' });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("user_id", user.id);
+
+    try {
+      const response = await fetch('https://hubbackend.desklago.com/api/business-leads/leads/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUploadMessage({ type: 'success', text: 'File uploaded successfully!' });
+      } else {
+        setUploadMessage({ type: 'error', text: data.message || 'Failed to upload file' });
+      }
+    } catch (error) {
+      setUploadMessage({ type: 'error', text: 'Network error occurred while uploading file' });
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    handleFileUpload(file);
+  };
+
   const getInputClassName = (fieldName) => `
     w-full px-4 py-2 border rounded-lg transition duration-150
     ${validationErrors[fieldName] 
@@ -186,7 +245,95 @@ const SubmitEntry = () => {
     <div className="max-w-4xl mx-auto">
       <div className="bg-white shadow-lg rounded-lg p-8">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">Submit Business Lead Entry</h2>
-        
+
+        {/* File Upload Section */}
+        <div className="mb-8">
+          <div className="flex items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Bulk Upload</h3>
+            <button
+              type="button"
+              className="ml-2 text-blue-600 hover:text-blue-800"
+              onClick={() => setShowFormatInfo(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Upload Area */}
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center ${
+              isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <input
+              type="file"
+              className="hidden"
+              id="fileUpload"
+              accept=".csv,.xls,.xlsx"
+              onChange={(e) => handleFileUpload(e.target.files[0])}
+            />
+            <label
+              htmlFor="fileUpload"
+              className="cursor-pointer flex flex-col items-center justify-center"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <p className="text-gray-600 mb-2">Drag & drop your file here or click to browse</p>
+              <p className="text-sm text-gray-500">Supported formats: CSV, XLS, XLSX</p>
+            </label>
+          </div>
+
+          {uploadMessage.text && (
+            <div className={`mt-4 p-4 rounded-lg ${
+              uploadMessage.type === 'success' 
+                ? 'bg-green-50 text-green-700 border border-green-200' 
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              {uploadMessage.text}
+            </div>
+          )}
+        </div>
+
+        {/* Format Info Popup */}
+        {showFormatInfo && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">File Format Requirements</h3>
+                <button
+                  onClick={() => setShowFormatInfo(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-4">
+                <p className="text-gray-600">Your file should contain the following columns:</p>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <code className="text-sm">
+                    business_name, business_email, business_phone, business_type, website_url, location, source_of_data, status, note
+                  </code>
+                </div>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-2">
+                  <li>File must be in CSV, XLS, or XLSX format</li>
+                  <li>First row should contain column headers</li>
+                  <li>business_name and status are required fields</li>
+                  <li>business_email must be a valid email address</li>
+                  <li>website_url must start with http:// or https://</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {message.text && (
           <div className={`p-4 mb-6 rounded-lg ${
             message.type === 'success' 

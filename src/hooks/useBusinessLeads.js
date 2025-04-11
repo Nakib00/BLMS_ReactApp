@@ -1,4 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import {
+  useState,
+  useCallback,
+  useEffect
+} from 'react';
 
 export const ITEMS_PER_PAGE = 10;
 
@@ -7,7 +11,7 @@ export const useBusinessLeads = (initialData = []) => {
   const [filteredData, setFilteredData] = useState(initialData);
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState({
-    search: '',
+    search: '', 
     business_type: '',
     status: '',
     location: '',
@@ -18,26 +22,26 @@ export const useBusinessLeads = (initialData = []) => {
   // Apply filters to data
   const applyFilters = useCallback((data, filters) => {
     return data.filter(item => {
-      const matchesSearch = !filters.search || 
-        Object.values(item).some(val => 
+      const matchesSearch = !filters.search ||
+        Object.values(item).some(val =>
           String(val).toLowerCase().includes(filters.search.toLowerCase())
         );
-      
-      const matchesBusinessType = !filters.business_type || 
-        item.business_type === filters.business_type;
-      
-      const matchesStatus = !filters.status || 
-        item.status === filters.status;
-      
-      const matchesLocation = !filters.location || 
-        item.location.toLowerCase().includes(filters.location.toLowerCase());
-      
-      const matchesDate = (!filters.from_date && !filters.to_date) || 
-        (new Date(item.created_at) >= new Date(filters.from_date) && 
-         new Date(item.created_at) <= new Date(filters.to_date));
 
-      return matchesSearch && matchesBusinessType && 
-             matchesStatus && matchesLocation && matchesDate;
+      const matchesBusinessType = !filters.business_type ||
+        item.business_type === filters.business_type;
+
+      const matchesStatus = !filters.status ||
+        item.status === filters.status;
+
+      const matchesLocation = !filters.location ||
+        item.location.toLowerCase().includes(filters.location.toLowerCase());
+
+      const matchesDate = (!filters.from_date && !filters.to_date) ||
+        (new Date(item.created_at) >= new Date(filters.from_date) &&
+          new Date(item.created_at) <= new Date(filters.to_date));
+
+      return matchesSearch && matchesBusinessType &&
+        matchesStatus && matchesLocation && matchesDate;
     });
   }, []);
 
@@ -54,7 +58,7 @@ export const useBusinessLeads = (initialData = []) => {
     if (isFiltering) {
       return filteredData; // Return all filtered data when filtering
     }
-    
+
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
     return filteredData.slice(start, end);

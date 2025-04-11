@@ -11,9 +11,6 @@ const BUSINESS_TYPES = [
   'Education', 'Consulting', 'Software', 'Food Pantry', 'Tax Preparer', 'Other'
 ];
 
-const STATUS_OPTIONS = [
-  'Interested', 'Not Interested', 'Pending', 'In Progress'
-];
 
 // Status color mapping
 const STATUS_COLORS = {
