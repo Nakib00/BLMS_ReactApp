@@ -109,7 +109,7 @@ const ViewSubmissions = () => {
         queryParams.append('user_id', user.id);
       }
 
-      const response = await fetch(`${API_BASE_URL}/business-leads?${queryParams}`, {
+      const response = await fetch(`${API_BASE_URL}/business-leads/${user?.id}?${queryParams}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -211,7 +211,7 @@ const ViewSubmissions = () => {
         message: { type: 'error', text: error.message }
       }));
     }
-  }, [state.selectedLead, token, fetchSubmissions]);
+  }, [state.selectedLead, token, fetchSubmissions, user]);
 
   // Handle lead deletion
   const handleLeadDelete = useCallback(async (id) => {
@@ -241,7 +241,7 @@ const ViewSubmissions = () => {
         message: { type: 'error', text: error.message }
       }));
     }
-  }, [token, fetchSubmissions]);
+  }, [token, fetchSubmissions, user]);
 
   // Handle input changes
   const handleInputChange = useCallback((e) => {

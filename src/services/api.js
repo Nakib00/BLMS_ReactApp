@@ -60,32 +60,37 @@ class ApiService {
 
   // Business Leads endpoints
   async getBusinessLeads(filters = {}) {
+    const user = JSON.parse(localStorage.getItem('user_data'));
     const queryParams = new URLSearchParams(filters).toString();
-    return this.request(`${API_ENDPOINTS.BUSINESS_LEADS.LIST}?${queryParams}`);
+    return this.request(`${API_ENDPOINTS.BUSINESS_LEADS.LIST(user?.id)}?${queryParams}`);
   }
 
   async createBusinessLead(leadData) {
-    return this.request(API_ENDPOINTS.BUSINESS_LEADS.CREATE, {
+    const user = JSON.parse(localStorage.getItem('user_data'));
+    return this.request(`${API_ENDPOINTS.BUSINESS_LEADS.CREATE}/${user?.id}`, {
       method: 'POST',
       body: JSON.stringify(leadData)
     });
   }
 
   async updateBusinessLead(id, leadData) {
-    return this.request(API_ENDPOINTS.BUSINESS_LEADS.UPDATE(id), {
+    const user = JSON.parse(localStorage.getItem('user_data'));
+    return this.request(`${API_ENDPOINTS.BUSINESS_LEADS.UPDATE(id)}/${user?.id}`, {
       method: 'PUT',
       body: JSON.stringify(leadData)
     });
   }
 
   async deleteBusinessLead(id) {
-    return this.request(API_ENDPOINTS.BUSINESS_LEADS.DELETE(id), {
+    const user = JSON.parse(localStorage.getItem('user_data'));
+    return this.request(`${API_ENDPOINTS.BUSINESS_LEADS.DELETE(id)}/${user?.id}`, {
       method: 'DELETE'
     });
   }
 
   async getBusinessLeadStats() {
-    return this.request(API_ENDPOINTS.BUSINESS_LEADS.STATS);
+    const user = JSON.parse(localStorage.getItem('user_data'));
+    return this.request(`${API_ENDPOINTS.BUSINESS_LEADS.STATS}/${user?.id}`);
   }
 }
 

@@ -35,7 +35,7 @@ export const API_ENDPOINTS = {
     PROFILE: '/profile'
   },
   BUSINESS_LEADS: {
-    LIST: '/business-leads',
+    LIST: (userId) => `/business-leads/${userId}`,
     CREATE: '/business-leads',
     UPDATE: (id) => `/business-leads/${id}`,
     DELETE: (id) => `/business-leads/${id}`,

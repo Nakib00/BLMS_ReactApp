@@ -29,8 +29,8 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch total lead count based on user role
-        const leadCountUrl = ['superadmin', 'admin'].includes(user?.type)
+        // Determine which API endpoint to use based on user type
+        const leadCountUrl = user?.type === 'superadmin' 
           ? 'https://hubbackend.desklago.com/api/business-leads/leads/count'
           : `https://hubbackend.desklago.com/api/business-leads/count/${user?.id}`;
 
@@ -46,14 +46,12 @@ const Dashboard = () => {
         }
 
         const leadCountData = await leadCountResponse.json();
-        setLeadCount(['superadmin', 'admin'].includes(user?.type) 
-          ? leadCountData.total_leads 
-          : leadCountData.lead_count
-        );
+        // Set lead count based on response structure
+        setLeadCount(user?.type === 'superadmin' ? leadCountData.total_leads : leadCountData.lead_count);
 
         // Fetch other stats for admin/superadmin
-        if (['superadmin', 'admin'].includes(user?.type)) {
-          const response = await fetch('https://hubbackend.desklago.com/api/business-leads/stats', {
+        if (['superadmin'].includes(user?.type)) {
+          const response = await fetch('https://hubbackend.desklago.com/api/business-leads/leads/count', {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -61,20 +59,24 @@ const Dashboard = () => {
           });
 
           if (!response.ok) {
-            throw new Error('Failed to fetch statistics');
+            throw new Error('Failed to fetch statistics for');
           }
 
           const data = await response.json();
+          console.log('Statistics data:', data);
           setStats(data.data);
         }
       } catch (err) {
         setError(err.message);
+        console.error('Error fetching dashboard data:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    if (token && user?.id) {
+      fetchData();
+    }
   }, [user, token]);
 
   if (loading) {
