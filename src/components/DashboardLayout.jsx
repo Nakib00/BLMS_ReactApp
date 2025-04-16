@@ -42,6 +42,21 @@ const DashboardLayout = () => {
             Dashboard
           </Link>
 
+          {/* Tasks - visible to admin, superadmin, leader, and member */}
+          {['admin', 'superadmin', 'leader', 'member'].includes(user?.type?.toLowerCase()) && (
+            <Link
+              to="/dashboard/tasks"
+              className={`mt-1 group flex items-center px-2 py-2 text-base font-medium rounded-md text-white hover:bg-gray-700 ${
+                location.pathname === '/dashboard/tasks' ? 'bg-gray-700' : ''
+              }`}
+            >
+              <svg className="mr-3 h-6 w-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              Tasks
+            </Link>
+          )}
+
           {/* View Submissions - visible to all users */}
           <Link
             to="/dashboard/view-submissions"
@@ -134,4 +149,4 @@ const DashboardLayout = () => {
   );
 };
 
-export default DashboardLayout; 
+export default DashboardLayout;

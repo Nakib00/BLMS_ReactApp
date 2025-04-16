@@ -7,6 +7,9 @@ import Dashboard from './pages/Dashboard';
 import SubmitEntry from './pages/SubmitEntry';
 import ViewSubmissions from './pages/ViewSubmissions';
 import Users from './pages/Users';
+import Tasks from './pages/Tasks';
+import TaskDetails from './pages/TaskDetails';
+import IndividualTaskDetails from './pages/IndividualTaskDetails';
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -17,6 +20,15 @@ const SuperAdminRoute = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" />;
   if (user?.type !== 'superadmin') return <Navigate to="/dashboard" />;
+  return children;
+};
+
+const TasksRoute = ({ children }) => {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (!['admin', 'superadmin', 'leader', 'member'].includes(user?.type?.toLowerCase())) {
+    return <Navigate to="/dashboard" />;
+  }
   return children;
 };
 
@@ -37,6 +49,30 @@ const App = () => {
             <Route index element={<Dashboard />} />
             <Route path="submit-entry" element={<SubmitEntry />} />
             <Route path="view-submissions" element={<ViewSubmissions />} />
+            <Route 
+              path="tasks" 
+              element={
+                <TasksRoute>
+                  <Tasks />
+                </TasksRoute>
+              } 
+            />
+            <Route 
+              path="tasks/:taskId" 
+              element={
+                <TasksRoute>
+                  <TaskDetails />
+                </TasksRoute>
+              } 
+            />
+            <Route 
+              path="tasks/:taskId/assignments/:assignmentId" 
+              element={
+                <TasksRoute>
+                  <IndividualTaskDetails />
+                </TasksRoute>
+              } 
+            />
             <Route 
               path="register" 
               element={
