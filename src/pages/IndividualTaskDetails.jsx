@@ -27,7 +27,7 @@ const IndividualTaskDetails = () => {
 
   const UncheckIcon = () => (
     <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2-2 0 012-2z" />
     </svg>
   );
 
@@ -65,6 +65,27 @@ const IndividualTaskDetails = () => {
   const handleCheckboxToggle = async (subtaskId) => {
     try {
       setCheckboxLoading(subtaskId);
+      setError(null);
+
+      // First, update UI optimistically
+      setTaskDetails(prev => {
+        if (!prev) return prev;
+        const updatedAssignment = {
+          ...prev.assignment,
+          individual_tasks: prev.assignment.individual_tasks.map(task => 
+            task.id === subtaskId ? {
+              ...task,
+              checkbox: task.checkbox === 1 ? 0 : 1
+            } : task
+          )
+        };
+        return {
+          ...prev,
+          assignment: updatedAssignment
+        };
+      });
+
+      // Then make the API call
       const response = await fetch(`https://hubbackend.desklago.com/api/tasks/individual-tasks/toggle-checkbox/${subtaskId}`, {
         method: 'POST',
         headers: {
@@ -80,15 +101,18 @@ const IndividualTaskDetails = () => {
         throw new Error(data.message || 'Failed to toggle checkbox');
       }
 
-      // Update the local state immediately with the new data
+      // Update the state with the server response
       setTaskDetails(prev => {
         if (!prev) return prev;
         const updatedAssignment = {
           ...prev.assignment,
           individual_tasks: prev.assignment.individual_tasks.map(task => 
-            task.id === subtaskId 
-              ? { ...task, checkbox: task.checkbox === 1 ? 0 : 1 }
-              : task
+            task.id === subtaskId ? {
+              ...task,
+              checkbox: data.data.checkbox,
+              status: data.data.status,
+              updated_at: data.data.updated_at
+            } : task
           )
         };
         return {
@@ -96,39 +120,26 @@ const IndividualTaskDetails = () => {
           assignment: updatedAssignment
         };
       });
-
-      // Fetch fresh data in the background
-      const taskResponse = await fetch(`https://hubbackend.desklago.com/api/tasks/${taskId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (taskResponse.ok) {
-        const freshData = await taskResponse.json();
-        const assignment = freshData.data.assigned_users.find(a => a.id.toString() === assignmentId);
-        if (assignment) {
-          setTaskDetails({ task: freshData.data, assignment });
-        }
-      }
     } catch (err) {
-      setError(err.message);
-      // Revert optimistic update on error
-      const taskResponse = await fetch(`https://hubbackend.desklago.com/api/tasks/${taskId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      // Revert the optimistic update on error
+      setTaskDetails(prev => {
+        if (!prev) return prev;
+        const updatedAssignment = {
+          ...prev.assignment,
+          individual_tasks: prev.assignment.individual_tasks.map(task => 
+            task.id === subtaskId ? {
+              ...task,
+              checkbox: task.checkbox === 1 ? 0 : 1 // Revert back
+            } : task
+          )
+        };
+        return {
+          ...prev,
+          assignment: updatedAssignment
+        };
       });
-
-      if (taskResponse.ok) {
-        const data = await taskResponse.json();
-        const assignment = data.data.assigned_users.find(a => a.id.toString() === assignmentId);
-        if (assignment) {
-          setTaskDetails({ task: data.data, assignment });
-        }
-      }
+      setError(err.message);
+      console.error('Toggle checkbox error:', err);
     } finally {
       setCheckboxLoading(null);
     }
